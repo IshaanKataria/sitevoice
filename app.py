@@ -48,7 +48,8 @@ if audio_data is not None:
         with open(f.name, "rb") as audio_file:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
-                file=audio_file
+                file=audio_file,
+                language="en"
             )
             voice_text = transcript.text
     os.unlink(f.name)
@@ -82,5 +83,15 @@ if prompt:
         reply = response.choices[0].message.content
         st.markdown(reply)
 
+        # Generate voice response
+        speech_response = client.audio.speech.create(
+            model="tts-1",
+            voice="onyx",
+            input=reply
+        )
+        audio_bytes = speech_response.content
+        st.audio(audio_bytes, format="audio/mp3", autoplay=True)
+
     # Save assistant response
     st.session_state.messages.append({"role": "assistant", "content": reply})
+    
