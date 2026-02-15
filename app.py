@@ -1,9 +1,11 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import tempfile
 import json
+import base64
 from datetime import datetime
 from plumbing_data import (
     PLUMBING_MATERIALS, LABOR_RATES, JOB_TEMPLATES,
@@ -34,6 +36,14 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+
+    /* Chat input at bottom */
+    .stChatInput {
+        position: sticky;
+        bottom: 0;
+        z-index: 998;
+        background: #0e1117;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -311,6 +321,8 @@ if "greeted" not in st.session_state:
     st.session_state.greeted = False
 if "pending_audio" not in st.session_state:
     st.session_state.pending_audio = None
+if "audio_played" not in st.session_state:
+    st.session_state.audio_played = False
 
 
 # --- FUNCTION HANDLERS ---
@@ -766,17 +778,6 @@ with st.sidebar:
 
 
 # --- MAIN CHAT AREA ---
-st.markdown("""
-<div style="display: flex; align-items: center; gap: 12px; margin-bottom: -10px;">
-    <span style="font-size: 42px;">🔧</span>
-    <div>
-        <h1 style="margin: 0; padding: 0; font-size: 36px; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">SiteVoice</h1>
-        <p style="margin: 0; color: #94a3b8; font-size: 15px;">Voice-powered AI assistant for plumbers</p>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-st.caption(f"{get_greeting()}, mate! Speak or type to manage your day.")
 
 # Welcome message on first load
 if not st.session_state.greeted:
@@ -784,22 +785,33 @@ if not st.session_state.greeted:
     st.session_state.messages.append({"role": "assistant", "content": welcome})
     st.session_state.greeted = True
 
-# Quick action buttons
-st.markdown("#### Quick Actions")
-col1, col2, col3, col4 = st.columns(4)
+# Sticky header with title + quick actions
 quick_prompt = None
-with col1:
-    if st.button("📋 My Jobs", use_container_width=True):
-        quick_prompt = "What jobs do I have?"
-with col2:
-    if st.button("📊 Day Summary", use_container_width=True):
-        quick_prompt = "Give me a summary of my day"
-with col3:
-    if st.button("➕ New Job", use_container_width=True):
-        quick_prompt = "I need to schedule a new job"
-with col4:
-    if st.button("💰 New Quote", use_container_width=True):
-        quick_prompt = "I need to create a quote for a customer"
+header_container = st.container()
+with header_container:
+    st.markdown("""
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
+        <span style="font-size: 36px;">🔧</span>
+        <div>
+            <h1 style="margin: 0; padding: 0; font-size: 30px; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">SiteVoice</h1>
+            <p style="margin: 0; color: #94a3b8; font-size: 13px;">Voice-powered AI assistant for plumbers</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        if st.button("📋 My Jobs", use_container_width=True):
+            quick_prompt = "What jobs do I have?"
+    with col2:
+        if st.button("📊 Day Summary", use_container_width=True):
+            quick_prompt = "Give me a summary of my day"
+    with col3:
+        if st.button("➕ New Job", use_container_width=True):
+            quick_prompt = "I need to schedule a new job"
+    with col4:
+        if st.button("💰 New Quote", use_container_width=True):
+            quick_prompt = "I need to create a quote for a customer"
 
 st.markdown("---")
 
@@ -883,8 +895,48 @@ if prompt:
             input=reply
         )
         st.session_state.pending_audio = speech_response.content
+        st.session_state.audio_played = False
 
-# Play audio OUTSIDE the prompt block so it doesn't get killed by rerun
-if st.session_state.pending_audio:
-    st.audio(st.session_state.pending_audio, format="audio/mp3", autoplay=True)
+# --- AUDIO PLAYBACK & AUTO-LISTEN ---
+# Two-phase approach: render audio on first pass, clear on second pass so input unblocks
+if st.session_state.pending_audio and not st.session_state.audio_played:
+    # Render audio in a components iframe (allows JS execution)
+    audio_b64 = base64.b64encode(st.session_state.pending_audio).decode()
+
+    # Custom HTML audio with JS: auto-play, and when finished auto-click the mic button
+    components.html(f"""
+    <audio id="sitevoice-tts" autoplay style="display:none;">
+        <source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">
+    </audio>
+    <div id="status" style="font-family:sans-serif;font-size:13px;color:#60a5fa;padding:8px 0;">
+        🔊 Speaking...
+    </div>
+    <script>
+        const audio = document.getElementById('sitevoice-tts');
+        const status = document.getElementById('status');
+        if (audio) {{
+            audio.addEventListener('ended', function() {{
+                status.textContent = '🎤 Your turn — listening...';
+                status.style.color = '#34d399';
+                // Try to auto-click the mic record button in the parent Streamlit frame
+                setTimeout(function() {{
+                    try {{
+                        const buttons = window.parent.document.querySelectorAll('button[data-testid="stAudioInputRecordButton"]');
+                        if (buttons.length > 0) {{
+                            buttons[0].click();
+                        }}
+                    }} catch(e) {{
+                        // Cross-origin may block this, that's ok
+                    }}
+                }}, 600);
+            }});
+            audio.addEventListener('error', function() {{
+                status.textContent = '⚠️ Audio error — type your message instead';
+                status.style.color = '#f59e0b';
+            }});
+        }}
+    </script>
+    """, height=40)
+
+    st.session_state.audio_played = True
     st.session_state.pending_audio = None
