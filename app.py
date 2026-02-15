@@ -32,6 +32,32 @@ st.markdown("""
         background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
     }
 
+    /* Sidebar text colors — make everything readable on dark background */
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] .stMarkdown,
+    section[data-testid="stSidebar"] [data-testid="stText"],
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+        color: #e2e8f0 !important;
+    }
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3 {
+        color: #f1f5f9 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stMetricValue"] {
+        color: #f1f5f9 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stMetricLabel"] p {
+        color: #94a3b8 !important;
+    }
+    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] p {
+        color: #94a3b8 !important;
+    }
+    section[data-testid="stSidebar"] .stExpander summary span {
+        color: #e2e8f0 !important;
+    }
+
     /* Hide default streamlit elements for cleaner look */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -323,6 +349,8 @@ if "pending_audio" not in st.session_state:
     st.session_state.pending_audio = None
 if "audio_played" not in st.session_state:
     st.session_state.audio_played = False
+if "should_auto_listen" not in st.session_state:
+    st.session_state.should_auto_listen = False
 
 
 # --- FUNCTION HANDLERS ---
@@ -887,6 +915,25 @@ if prompt:
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
 
+    # Detect if the AI is asking a question or ending the conversation
+    reply_lower = reply.lower().strip()
+    is_question = reply_lower.endswith("?") or any(
+        phrase in reply_lower for phrase in [
+            "what else", "anything else", "need anything", "what do you",
+            "shall i", "want me to", "how does that", "sound good",
+            "let me know", "what's the", "which one"
+        ]
+    )
+    is_closing = any(
+        phrase in reply_lower for phrase in [
+            "have a good one", "cheers!", "no worries, legend",
+            "give me a shout", "give us a buzz", "anytime you need",
+            "all sorted", "you're all sorted"
+        ]
+    ) and not is_question
+
+    st.session_state.should_auto_listen = is_question and not is_closing
+
     # Generate TTS and store in session state (played below, outside this block)
     with st.spinner("Generating voice..."):
         speech_response = client.audio.speech.create(
@@ -898,45 +945,69 @@ if prompt:
         st.session_state.audio_played = False
 
 # --- AUDIO PLAYBACK & AUTO-LISTEN ---
-# Two-phase approach: render audio on first pass, clear on second pass so input unblocks
 if st.session_state.pending_audio and not st.session_state.audio_played:
-    # Render audio in a components iframe (allows JS execution)
     audio_b64 = base64.b64encode(st.session_state.pending_audio).decode()
+    should_listen = st.session_state.get("should_auto_listen", False)
 
-    # Custom HTML audio with JS: auto-play, and when finished auto-click the mic button
+    if should_listen:
+        end_status_text = "🎤 Your turn — listening..."
+        end_color = "#34d399"
+        # Auto-click: search broadly for any mic/record button in the parent doc
+        auto_listen_block = """
+                setTimeout(function() {
+                    try {
+                        var doc = window.parent.document;
+                        // Broad search: find all buttons, look for mic-related ones
+                        var allBtns = doc.querySelectorAll('button');
+                        for (var i = 0; i < allBtns.length; i++) {
+                            var b = allBtns[i];
+                            var label = (b.getAttribute('aria-label') || '').toLowerCase();
+                            var testid = (b.getAttribute('data-testid') || '').toLowerCase();
+                            var title = (b.getAttribute('title') || '').toLowerCase();
+                            var svg = b.querySelector('svg');
+                            // Match record/mic buttons by any identifier
+                            if (label.indexOf('record') !== -1 ||
+                                testid.indexOf('record') !== -1 ||
+                                testid.indexOf('audio') !== -1 ||
+                                title.indexOf('record') !== -1) {
+                                b.click();
+                                break;
+                            }
+                        }
+                    } catch(e) {}
+                }, 800);
+        """
+    else:
+        end_status_text = "✅ All done"
+        end_color = "#64748b"
+        auto_listen_block = ""
+
     components.html(f"""
-    <audio id="sitevoice-tts" autoplay style="display:none;">
+    <audio id="sv-audio" autoplay>
         <source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">
     </audio>
-    <div id="status" style="font-family:sans-serif;font-size:13px;color:#60a5fa;padding:8px 0;">
+    <div id="sv-status" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;color:#60a5fa;padding:8px 0;">
         🔊 Speaking...
     </div>
     <script>
-        const audio = document.getElementById('sitevoice-tts');
-        const status = document.getElementById('status');
-        if (audio) {{
+        (function() {{
+            var audio = document.getElementById('sv-audio');
+            var status = document.getElementById('sv-status');
+            if (!audio) return;
+
             audio.addEventListener('ended', function() {{
-                status.textContent = '🎤 Your turn — listening...';
-                status.style.color = '#34d399';
-                // Try to auto-click the mic record button in the parent Streamlit frame
-                setTimeout(function() {{
-                    try {{
-                        const buttons = window.parent.document.querySelectorAll('button[data-testid="stAudioInputRecordButton"]');
-                        if (buttons.length > 0) {{
-                            buttons[0].click();
-                        }}
-                    }} catch(e) {{
-                        // Cross-origin may block this, that's ok
-                    }}
-                }}, 600);
+                status.textContent = '{end_status_text}';
+                status.style.color = '{end_color}';
+                {auto_listen_block}
             }});
+
             audio.addEventListener('error', function() {{
                 status.textContent = '⚠️ Audio error — type your message instead';
                 status.style.color = '#f59e0b';
             }});
-        }}
+        }})();
     </script>
-    """, height=40)
+    """, height=50)
 
     st.session_state.audio_played = True
     st.session_state.pending_audio = None
