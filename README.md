@@ -171,7 +171,7 @@ Sophiie senior engineers and CTO. Judging will take place over a 2-week period f
 |-------|-------------|
 | **Project Name** | SiteVoice |
 | **One-Line Description** | A voice-powered AI assistant that helps plumbers build professional quotes and manage jobs hands-free on the job site. |
-| **Demo Video Link** | <!-- ADD YOUR VIDEO LINK HERE --> |
+| **Demo Video Link** | https://www.loom.com/share/eaa7dfe58c404c618f7f645bbb4f8709 |
 | **Tech Stack** | Python, Streamlit, OpenAI GPT-4o, Whisper STT, OpenAI TTS |
 | **AI Provider(s) Used** | OpenAI (GPT-4o, Whisper, TTS) |
 
