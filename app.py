@@ -309,6 +309,8 @@ if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 if "greeted" not in st.session_state:
     st.session_state.greeted = False
+if "pending_audio" not in st.session_state:
+    st.session_state.pending_audio = None
 
 
 # --- FUNCTION HANDLERS ---
@@ -684,12 +686,12 @@ with st.sidebar:
         for i, quote in enumerate(st.session_state.quotes):
             total = quote.get("total", quote.get("amount", 0))
             with st.expander(f"#{quote.get('id', i+1)} {quote['client_name']} — ${total:,.2f}"):
-                # Use native Streamlit components inside expander (HTML doesn't render well here)
-                st.caption(quote.get("job_description", quote.get("description", "")))
-                if quote.get("address"):
-                    st.caption(f"📍 {quote['address']}")
+                # Job description
+                job_desc = quote.get("job_description", quote.get("description", ""))
+                addr_line = f"  \n📍 {quote['address']}" if quote.get("address") else ""
+                st.markdown(f"*{job_desc}*{addr_line}")
 
-                # Group and display line items
+                # Group line items
                 materials = [li for li in quote.get("line_items", []) if li["category"] == "materials"]
                 labor = [li for li in quote.get("line_items", []) if li["category"] == "labor"]
                 callout = [li for li in quote.get("line_items", []) if li["category"] == "callout"]
@@ -699,15 +701,33 @@ with st.sidebar:
                     if items:
                         st.markdown(f"**{section_name}**")
                         for item in items:
-                            st.write(f"  {item['item_name']}  \n  {item['quantity']} x ${item['unit_price']:.2f} = **${item['line_total']:.2f}**")
+                            col_l, col_r = st.columns([3, 1])
+                            with col_l:
+                                st.markdown(f"{item['item_name']}  \n`{item['quantity']} x ${item['unit_price']:.2f}`")
+                            with col_r:
+                                st.markdown(f"**${item['line_total']:.2f}**")
 
                 subtotal = quote.get("subtotal", sum(li["line_total"] for li in quote.get("line_items", [])))
                 gst = quote.get("gst", subtotal * 0.1)
-                st.markdown("---")
-                st.write(f"Subtotal: **${subtotal:.2f}**")
-                st.write(f"GST (10%): ${gst:.2f}")
-                st.markdown(f"### Total: ${total:,.2f}")
+                st.divider()
+                col_l, col_r = st.columns([3, 1])
+                with col_l:
+                    st.markdown("Subtotal")
+                with col_r:
+                    st.markdown(f"**${subtotal:.2f}**")
+                col_l, col_r = st.columns([3, 1])
+                with col_l:
+                    st.markdown("GST (10%)")
+                with col_r:
+                    st.markdown(f"${gst:.2f}")
+                st.divider()
+                col_l, col_r = st.columns([3, 1])
+                with col_l:
+                    st.markdown("**TOTAL**")
+                with col_r:
+                    st.markdown(f"### ${total:,.2f}")
 
+                st.caption(f"Generated {quote.get('created_at', '')}")
                 if st.button("Delete", key=f"del_q_{i}", use_container_width=True):
                     st.session_state.quotes.pop(i)
                     st.rerun()
@@ -853,13 +873,18 @@ if prompt:
             reply = process_ai_response(api_messages)
         st.markdown(reply)
 
-        # TTS response
+    st.session_state.messages.append({"role": "assistant", "content": reply})
+
+    # Generate TTS and store in session state (played below, outside this block)
+    with st.spinner("Generating voice..."):
         speech_response = client.audio.speech.create(
             model="tts-1",
             voice="onyx",
             input=reply
         )
-        st.audio(speech_response.content, format="audio/mp3", autoplay=True)
+        st.session_state.pending_audio = speech_response.content
 
-    st.session_state.messages.append({"role": "assistant", "content": reply})
-    st.rerun()
+# Play audio OUTSIDE the prompt block so it doesn't get killed by rerun
+if st.session_state.pending_audio:
+    st.audio(st.session_state.pending_audio, format="audio/mp3", autoplay=True)
+    st.session_state.pending_audio = None
