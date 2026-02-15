@@ -32,7 +32,7 @@ st.markdown("""
         background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
     }
 
-    /* Sidebar text colors — make everything readable on dark background */
+    /* Sidebar text colors — readable on dark background */
     section[data-testid="stSidebar"] p,
     section[data-testid="stSidebar"] span,
     section[data-testid="stSidebar"] label,
@@ -58,6 +58,30 @@ st.markdown("""
         color: #e2e8f0 !important;
     }
 
+    /* Sidebar expander — more visible border */
+    section[data-testid="stSidebar"] .stExpander {
+        border: 1px solid #334155 !important;
+        border-radius: 8px !important;
+        background: rgba(30, 41, 59, 0.5) !important;
+    }
+
+    /* Sidebar delete button — red tint so it's clearly visible */
+    section[data-testid="stSidebar"] .stExpander button {
+        background: rgba(239, 68, 68, 0.15) !important;
+        border: 1px solid rgba(239, 68, 68, 0.4) !important;
+        color: #fca5a5 !important;
+    }
+    section[data-testid="stSidebar"] .stExpander button:hover {
+        background: rgba(239, 68, 68, 0.3) !important;
+        border: 1px solid rgba(239, 68, 68, 0.6) !important;
+        color: #fef2f2 !important;
+    }
+
+    /* Smaller font in sidebar for prices to prevent wrapping */
+    section[data-testid="stSidebar"] .stExpander code {
+        font-size: 11px !important;
+    }
+
     /* Hide default streamlit elements for cleaner look */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -69,6 +93,11 @@ st.markdown("""
         bottom: 0;
         z-index: 998;
         background: #0e1117;
+    }
+
+    /* Quick action buttons — subtle styling */
+    div[data-testid="stHorizontalBlock"] > div > div > button {
+        font-size: 13px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -747,34 +776,34 @@ with st.sidebar:
                     if items:
                         st.markdown(f"**{section_name}**")
                         for item in items:
-                            col_l, col_r = st.columns([3, 1])
-                            with col_l:
-                                st.markdown(f"{item['item_name']}  \n`{item['quantity']} x ${item['unit_price']:.2f}`")
-                            with col_r:
-                                st.markdown(f"**${item['line_total']:.2f}**")
+                            st.markdown(
+                                f"<div style='display:flex;justify-content:space-between;padding:2px 0;font-size:13px;'>"
+                                f"<span>{item['item_name']}<br/><span style='color:#94a3b8;font-size:11px;'>{item['quantity']} x ${item['unit_price']:.2f}</span></span>"
+                                f"<span style='font-weight:600;white-space:nowrap;'>${item['line_total']:.2f}</span>"
+                                f"</div>",
+                                unsafe_allow_html=True
+                            )
 
                 subtotal = quote.get("subtotal", sum(li["line_total"] for li in quote.get("line_items", [])))
                 gst = quote.get("gst", subtotal * 0.1)
                 st.divider()
-                col_l, col_r = st.columns([3, 1])
-                with col_l:
-                    st.markdown("Subtotal")
-                with col_r:
-                    st.markdown(f"**${subtotal:.2f}**")
-                col_l, col_r = st.columns([3, 1])
-                with col_l:
-                    st.markdown("GST (10%)")
-                with col_r:
-                    st.markdown(f"${gst:.2f}")
+                st.markdown(
+                    f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
+                    f"<span>Subtotal</span><span style='font-weight:600;'>${subtotal:.2f}</span></div>"
+                    f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;color:#94a3b8;'>"
+                    f"<span>GST (10%)</span><span>${gst:.2f}</span></div>",
+                    unsafe_allow_html=True
+                )
                 st.divider()
-                col_l, col_r = st.columns([3, 1])
-                with col_l:
-                    st.markdown("**TOTAL**")
-                with col_r:
-                    st.markdown(f"### ${total:,.2f}")
+                st.markdown(
+                    f"<div style='display:flex;justify-content:space-between;align-items:center;padding:4px 0;'>"
+                    f"<span style='font-weight:700;font-size:15px;'>TOTAL</span>"
+                    f"<span style='font-weight:700;font-size:20px;color:#34d399;'>${total:,.2f}</span></div>",
+                    unsafe_allow_html=True
+                )
 
                 st.caption(f"Generated {quote.get('created_at', '')}")
-                if st.button("Delete", key=f"del_q_{i}", use_container_width=True):
+                if st.button("🗑️ Delete Quote", key=f"del_q_{i}", use_container_width=True):
                     st.session_state.quotes.pop(i)
                     st.rerun()
     else:
@@ -824,11 +853,11 @@ quick_prompt = None
 header_container = st.container()
 with header_container:
     st.markdown("""
-    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 4px;">
-        <span style="font-size: 36px;">🔧</span>
+    <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 10px; padding: 14px 0;">
+        <div style="width: 72px; height: 72px; background: linear-gradient(135deg, #1e40af, #059669); border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 36px; box-shadow: 0 6px 16px rgba(96, 165, 250, 0.25); flex-shrink: 0;">🔧</div>
         <div>
-            <h1 style="margin: 0; padding: 0; font-size: 30px; font-weight: 800; background: linear-gradient(135deg, #60a5fa, #34d399); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">SiteVoice</h1>
-            <p style="margin: 0; color: #94a3b8; font-size: 13px;">Voice-powered AI assistant for plumbers</p>
+            <h1 style="margin: 0; padding: 0; font-size: 48px; font-weight: 900; background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -1px; line-height: 1.1;">SiteVoice</h1>
+            <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 16px; letter-spacing: 0.5px;">Voice-powered AI assistant for plumbers</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -866,7 +895,13 @@ with chat_container:
                 st.markdown(message["content"])
 
 # Voice recording
-st.markdown("#### 🎤 Tap to speak")
+st.markdown("""
+<div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px 0;">
+    <span style="font-size:20px;">🎤</span>
+    <span style="font-size:16px;font-weight:600;color:#e2e8f0;">Tap to speak</span>
+    <span style="font-size:12px;color:#64748b;">or type below</span>
+</div>
+""", unsafe_allow_html=True)
 audio_data = st.audio_input("Record your message")
 
 # Process voice input
