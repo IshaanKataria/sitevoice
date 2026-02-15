@@ -21,7 +21,8 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 st.set_page_config(
     page_title="SiteVoice",
     page_icon="🔧",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # --- CUSTOM CSS ---
@@ -65,13 +66,13 @@ st.markdown("""
         background: rgba(30, 41, 59, 0.5) !important;
     }
 
-    /* Sidebar delete button — red tint so it's clearly visible */
-    section[data-testid="stSidebar"] .stExpander button {
+    /* Sidebar delete button — red tint so it's clearly visible (only target stButton, not expander toggles) */
+    section[data-testid="stSidebar"] .stExpander [data-testid="stBaseButton-secondary"] {
         background: rgba(239, 68, 68, 0.15) !important;
         border: 1px solid rgba(239, 68, 68, 0.4) !important;
         color: #fca5a5 !important;
     }
-    section[data-testid="stSidebar"] .stExpander button:hover {
+    section[data-testid="stSidebar"] .stExpander [data-testid="stBaseButton-secondary"]:hover {
         background: rgba(239, 68, 68, 0.3) !important;
         border: 1px solid rgba(239, 68, 68, 0.6) !important;
         color: #fef2f2 !important;
@@ -85,7 +86,34 @@ st.markdown("""
     /* Hide default streamlit elements for cleaner look */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* Keep header visible so sidebar toggle works, but hide inner content */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        backdrop-filter: none !important;
+    }
+
+    /* Sidebar width when open */
+    section[data-testid="stSidebar"][aria-expanded="true"] {
+        min-width: 340px !important;
+        width: 340px !important;
+    }
+
+    /* Main content fills full width when sidebar is closed */
+    .main .block-container {
+        max-width: 100% !important;
+        transition: padding 0.3s ease;
+    }
+
+    /* Hide audio recorder error message — functionally still works */
+    [data-testid="stAudioInput"] [data-testid="stNotification"],
+    [data-testid="stAudioInput"] .stAlert {
+        display: none !important;
+    }
+    /* Hide the "An error has occurred" text inside audio widget */
+    [data-testid="stAudioInput"] iframe + div,
+    .stException, .element-container:has(.stException) {
+        display: none !important;
+    }
 
     /* Chat input at bottom */
     .stChatInput {
@@ -585,32 +613,7 @@ FUNCTION_MAP = {
 
 def process_ai_response(messages):
     """Process AI response, handling multiple rounds of tool calls."""
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
-        tools=TOOLS,
-    )
-    message = response.choices[0].message
-
-    # Handle tool calls (may need multiple rounds)
-    max_rounds = 5
-    rounds = 0
-    while message.tool_calls and rounds < max_rounds:
-        rounds += 1
-        messages.append(message)
-        for tool_call in message.tool_calls:
-            func_name = tool_call.function.name
-            func_args = json.loads(tool_call.function.arguments)
-            if func_name in FUNCTION_MAP:
-                result = FUNCTION_MAP[func_name](func_args)
-            else:
-                result = f"Unknown function: {func_name}"
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": result
-            })
-
+    try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -618,7 +621,50 @@ def process_ai_response(messages):
         )
         message = response.choices[0].message
 
-    return message.content
+        # Handle tool calls (may need multiple rounds)
+        max_rounds = 5
+        rounds = 0
+        while message.tool_calls and rounds < max_rounds:
+            rounds += 1
+            # Append the assistant message with tool calls
+            messages.append({
+                "role": "assistant",
+                "content": message.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        }
+                    }
+                    for tc in message.tool_calls
+                ]
+            })
+            for tool_call in message.tool_calls:
+                func_name = tool_call.function.name
+                func_args = json.loads(tool_call.function.arguments)
+                if func_name in FUNCTION_MAP:
+                    result = FUNCTION_MAP[func_name](func_args)
+                else:
+                    result = f"Unknown function: {func_name}"
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": str(result)
+                })
+
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=TOOLS,
+            )
+            message = response.choices[0].message
+
+        return message.content or "Done, mate! Anything else?"
+    except Exception as e:
+        return f"Sorry mate, hit a snag: {str(e)}"
 
 
 def render_quote_card_html(quote, is_active=False):
@@ -964,7 +1010,17 @@ if prompt:
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
 
-    # Detect if the AI is asking a question or ending the conversation
+    # Auto-scroll to bottom so user always sees latest message
+    components.html("""
+    <script>
+        window.parent.document.querySelector('section.main').scrollTo({
+            top: window.parent.document.querySelector('section.main').scrollHeight,
+            behavior: 'smooth'
+        });
+    </script>
+    """, height=0)
+
+    # Detect if the AI is asking a question (for auto-listen)
     reply_lower = reply.lower().strip()
     is_question = reply_lower.endswith("?") or any(
         phrase in reply_lower for phrase in [
@@ -973,26 +1029,16 @@ if prompt:
             "let me know", "what's the", "which one"
         ]
     )
-    is_closing = any(
-        phrase in reply_lower for phrase in [
-            "have a good one", "cheers!", "no worries, legend",
-            "give me a shout", "give us a buzz", "anytime you need",
-            "all sorted", "you're all sorted"
-        ]
-    ) and not is_question
 
-    st.session_state.should_auto_listen = is_question and not is_closing
-
-    # Auto-clear chat when conversation ends naturally, keep only the last AI message
-    if is_closing:
-        st.session_state.messages = [{"role": "assistant", "content": reply}]
+    st.session_state.should_auto_listen = is_question
 
     # Generate TTS and store in session state (played below, outside this block)
     with st.spinner("Generating voice..."):
         speech_response = client.audio.speech.create(
             model="tts-1",
             voice="onyx",
-            input=reply
+            input=reply,
+            speed=1.2
         )
         st.session_state.pending_audio = speech_response.content
         st.session_state.audio_played = False
@@ -1002,23 +1048,20 @@ if st.session_state.pending_audio and not st.session_state.audio_played:
     audio_b64 = base64.b64encode(st.session_state.pending_audio).decode()
     should_listen = st.session_state.get("should_auto_listen", False)
 
+    end_status_text = "🎤 Your turn"
+    end_color = "#34d399"
     if should_listen:
-        end_status_text = "🎤 Your turn — listening..."
-        end_color = "#34d399"
         # Auto-click: search broadly for any mic/record button in the parent doc
         auto_listen_block = """
                 setTimeout(function() {
                     try {
                         var doc = window.parent.document;
-                        // Broad search: find all buttons, look for mic-related ones
                         var allBtns = doc.querySelectorAll('button');
                         for (var i = 0; i < allBtns.length; i++) {
                             var b = allBtns[i];
                             var label = (b.getAttribute('aria-label') || '').toLowerCase();
                             var testid = (b.getAttribute('data-testid') || '').toLowerCase();
                             var title = (b.getAttribute('title') || '').toLowerCase();
-                            var svg = b.querySelector('svg');
-                            // Match record/mic buttons by any identifier
                             if (label.indexOf('record') !== -1 ||
                                 testid.indexOf('record') !== -1 ||
                                 testid.indexOf('audio') !== -1 ||
@@ -1031,8 +1074,6 @@ if st.session_state.pending_audio and not st.session_state.audio_played:
                 }, 800);
         """
     else:
-        end_status_text = "✅ All done"
-        end_color = "#64748b"
         auto_listen_block = ""
 
     components.html(f"""
