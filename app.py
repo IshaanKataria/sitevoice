@@ -25,112 +25,6 @@ st.set_page_config(
 # --- CUSTOM CSS ---
 st.markdown("""
 <style>
-    /* Main theme */
-    .stApp {
-        background-color: #0e1117;
-    }
-
-    /* Quote card styling */
-    .quote-card {
-        background: linear-gradient(135deg, #1a1f2e 0%, #232b3e 100%);
-        border: 1px solid #3d4f7c;
-        border-radius: 16px;
-        padding: 20px;
-        margin: 10px 0;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    }
-    .quote-header {
-        font-size: 18px;
-        font-weight: 700;
-        color: #60a5fa;
-        margin-bottom: 4px;
-    }
-    .quote-client {
-        font-size: 14px;
-        color: #94a3b8;
-        margin-bottom: 12px;
-    }
-    .quote-line-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid rgba(255,255,255,0.06);
-        font-size: 13px;
-        color: #e2e8f0;
-    }
-    .quote-line-item:last-child {
-        border-bottom: none;
-    }
-    .quote-line-qty {
-        color: #94a3b8;
-        font-size: 12px;
-    }
-    .quote-line-price {
-        font-weight: 600;
-        color: #60a5fa;
-    }
-    .quote-section-label {
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        color: #64748b;
-        margin-top: 14px;
-        margin-bottom: 6px;
-        font-weight: 600;
-    }
-    .quote-total-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 14px 0 4px 0;
-        border-top: 2px solid #3d4f7c;
-        margin-top: 10px;
-        font-size: 18px;
-        font-weight: 700;
-    }
-    .quote-total-label {
-        color: #e2e8f0;
-    }
-    .quote-total-amount {
-        color: #34d399;
-        font-size: 22px;
-    }
-    .quote-gst {
-        text-align: right;
-        font-size: 12px;
-        color: #64748b;
-        margin-top: 2px;
-    }
-    .quote-footer {
-        text-align: center;
-        font-size: 11px;
-        color: #475569;
-        margin-top: 16px;
-        padding-top: 12px;
-        border-top: 1px solid rgba(255,255,255,0.06);
-    }
-
-    /* Status badge */
-    .status-badge {
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-    .status-draft { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
-    .status-sent { background: #172554; color: #60a5fa; border: 1px solid #1e40af; }
-    .status-accepted { background: #052e16; color: #34d399; border: 1px solid #166534; }
-
-    /* Voice pulse animation */
-    @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.5); }
-        70% { box-shadow: 0 0 0 15px rgba(96, 165, 250, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
-    }
-    .voice-active {
-        animation: pulse 1.5s infinite;
-    }
-
     /* Sidebar styling */
     section[data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
@@ -650,8 +544,8 @@ def process_ai_response(messages):
     return message.content
 
 
-def render_quote_card(quote, is_active=False):
-    """Render a beautiful quote card as HTML."""
+def render_quote_card_html(quote, is_active=False):
+    """Render a self-contained quote card with all styles inline (works in st.html iframe)."""
     line_items_html = ""
 
     # Group items by category
@@ -663,14 +557,14 @@ def render_quote_card(quote, is_active=False):
     def render_items(items, section_label):
         html = ""
         if items:
-            html += f'<div class="quote-section-label">{section_label}</div>'
+            html += f'<div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#64748b;margin-top:14px;margin-bottom:6px;font-weight:600;">{section_label}</div>'
             for item in items:
-                html += f'''<div class="quote-line-item">
+                html += f'''<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px;color:#e2e8f0;">
                     <div>
                         <div>{item["item_name"]}</div>
-                        <div class="quote-line-qty">{item["quantity"]} x ${item["unit_price"]:.2f}/{item.get("unit", "each")}</div>
+                        <div style="color:#94a3b8;font-size:12px;">{item["quantity"]} x ${item["unit_price"]:.2f}/{item.get("unit", "each")}</div>
                     </div>
-                    <div class="quote-line-price">${item["line_total"]:.2f}</div>
+                    <div style="font-weight:600;color:#60a5fa;">${item["line_total"]:.2f}</div>
                 </div>'''
         return html
 
@@ -683,33 +577,46 @@ def render_quote_card(quote, is_active=False):
     gst = quote.get("gst", subtotal * 0.1)
     total = quote.get("total", subtotal + gst)
 
-    status_class = f"status-{quote.get('status', 'draft')}"
     status_label = quote.get("status", "draft").upper()
     border_color = "#f59e0b" if is_active else "#3d4f7c"
     glow = "box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);" if is_active else ""
 
+    # Status badge colors
+    status = quote.get("status", "draft")
+    if status == "sent":
+        badge_style = "background:#172554;color:#60a5fa;border:1px solid #1e40af;"
+    elif status == "accepted":
+        badge_style = "background:#052e16;color:#34d399;border:1px solid #166534;"
+    else:
+        badge_style = "background:#1e293b;color:#94a3b8;border:1px solid #334155;"
+
+    no_items_msg = ""
+    if not quote.get("line_items"):
+        no_items_msg = '<div style="text-align:center;color:#475569;padding:16px 0;font-size:13px;">No items yet — keep talking to add materials and labour</div>'
+
     card_html = f'''
-    <div class="quote-card" style="border-color: {border_color}; {glow}">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="quote-header">Quote #{quote.get("id", "—")}</div>
-            <span class="status-badge {status_class}">{status_label}</span>
+    <div style="background:linear-gradient(135deg,#1a1f2e 0%,#232b3e 100%);border:1px solid {border_color};border-radius:16px;padding:20px;margin:10px 0;{glow}font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-size:18px;font-weight:700;color:#60a5fa;margin-bottom:4px;">Quote #{quote.get("id", "—")}</div>
+            <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;{badge_style}">{status_label}</span>
         </div>
-        <div class="quote-client">{quote.get("client_name", "")} — {quote.get("job_description", quote.get("description", ""))}</div>
-        {f'<div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">📍 {quote["address"]}</div>' if quote.get("address") else ""}
+        <div style="font-size:14px;color:#94a3b8;margin-bottom:12px;">{quote.get("client_name", "")} — {quote.get("job_description", quote.get("description", ""))}</div>
+        {f'<div style="font-size:12px;color:#64748b;margin-bottom:8px;">📍 {quote["address"]}</div>' if quote.get("address") else ""}
+        {no_items_msg}
         {line_items_html}
-        <div class="quote-total-row">
-            <span class="quote-total-label">Subtotal</span>
-            <span class="quote-line-price">${subtotal:.2f}</span>
+        <div style="display:flex;justify-content:space-between;padding:14px 0 4px 0;border-top:2px solid #3d4f7c;margin-top:10px;font-size:16px;font-weight:700;">
+            <span style="color:#e2e8f0;">Subtotal</span>
+            <span style="font-weight:600;color:#60a5fa;">${subtotal:.2f}</span>
         </div>
-        <div class="quote-line-item" style="border-bottom: none; color: #94a3b8;">
+        <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;color:#94a3b8;">
             <span>GST (10%)</span>
             <span>${gst:.2f}</span>
         </div>
-        <div class="quote-total-row">
-            <span class="quote-total-label">TOTAL (inc GST)</span>
-            <span class="quote-total-amount">${total:.2f}</span>
+        <div style="display:flex;justify-content:space-between;padding:10px 0 4px 0;border-top:2px solid #3d4f7c;margin-top:6px;font-size:18px;font-weight:700;">
+            <span style="color:#e2e8f0;">TOTAL (inc GST)</span>
+            <span style="color:#34d399;font-size:22px;">${total:.2f}</span>
         </div>
-        <div class="quote-footer">
+        <div style="text-align:center;font-size:11px;color:#475569;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);">
             Generated by SiteVoice • {quote.get("created_at", datetime.now().strftime("%Y-%m-%d %H:%M"))}
         </div>
     </div>
@@ -722,7 +629,11 @@ with st.sidebar:
     # Active quote card (top of sidebar for visibility)
     if st.session_state.active_quote:
         st.markdown("## 🔨 Building Quote...")
-        st.markdown(render_quote_card(st.session_state.active_quote, is_active=True), unsafe_allow_html=True)
+        # st.html renders raw HTML properly in its own iframe (Streamlit 1.33+)
+        try:
+            st.html(render_quote_card_html(st.session_state.active_quote, is_active=True))
+        except AttributeError:
+            st.markdown(render_quote_card_html(st.session_state.active_quote, is_active=True), unsafe_allow_html=True)
         items_count = len(st.session_state.active_quote["line_items"])
         running_total = sum(li["line_total"] for li in st.session_state.active_quote["line_items"])
         st.caption(f"{items_count} items • ${running_total:.2f} ex GST • Keep talking to add more")
@@ -773,7 +684,30 @@ with st.sidebar:
         for i, quote in enumerate(st.session_state.quotes):
             total = quote.get("total", quote.get("amount", 0))
             with st.expander(f"#{quote.get('id', i+1)} {quote['client_name']} — ${total:,.2f}"):
-                st.markdown(render_quote_card(quote), unsafe_allow_html=True)
+                # Use native Streamlit components inside expander (HTML doesn't render well here)
+                st.caption(quote.get("job_description", quote.get("description", "")))
+                if quote.get("address"):
+                    st.caption(f"📍 {quote['address']}")
+
+                # Group and display line items
+                materials = [li for li in quote.get("line_items", []) if li["category"] == "materials"]
+                labor = [li for li in quote.get("line_items", []) if li["category"] == "labor"]
+                callout = [li for li in quote.get("line_items", []) if li["category"] == "callout"]
+                other = [li for li in quote.get("line_items", []) if li["category"] == "other"]
+
+                for section_name, items in [("Materials", materials), ("Labour", labor), ("Callout", callout), ("Other", other)]:
+                    if items:
+                        st.markdown(f"**{section_name}**")
+                        for item in items:
+                            st.write(f"  {item['item_name']}  \n  {item['quantity']} x ${item['unit_price']:.2f} = **${item['line_total']:.2f}**")
+
+                subtotal = quote.get("subtotal", sum(li["line_total"] for li in quote.get("line_items", [])))
+                gst = quote.get("gst", subtotal * 0.1)
+                st.markdown("---")
+                st.write(f"Subtotal: **${subtotal:.2f}**")
+                st.write(f"GST (10%): ${gst:.2f}")
+                st.markdown(f"### Total: ${total:,.2f}")
+
                 if st.button("Delete", key=f"del_q_{i}", use_container_width=True):
                     st.session_state.quotes.pop(i)
                     st.rerun()
