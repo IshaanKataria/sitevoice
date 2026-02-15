@@ -140,8 +140,14 @@ When a tradie wants to create a quote, follow this interactive process:
 4. Add line items one at a time using add_quote_line_item as details emerge
 5. Suggest materials and prices from your database when relevant
 6. Ask if there's anything else to add
-7. When they're happy, call finalise_quote to lock it in
+7. When they're happy, ALWAYS call finalise_quote to lock it in
 8. Keep the conversation natural — you're building the quote WITH them, not interrogating them
+
+CRITICAL FINALISATION RULE:
+- When the tradie says ANYTHING like "that's it", "lock it in", "done", "finalise it", "wrap it up", "finish it", "that's all", "good to go", "send it", "looks good" → you MUST call finalise_quote immediately
+- You MUST call the finalise_quote function tool — do NOT just say "the quote is done" without actually calling the function
+- If you add the last items and the tradie wants to finish, call add_quote_line_item AND finalise_quote in the same response
+- NEVER leave a quote in draft status if the tradie has indicated they want to finish
 
 For example, if a plumber says "I need a quote for Karen, hot water replacement":
 - Start the quote, ask what model/brand they're looking at
@@ -150,7 +156,7 @@ For example, if a plumber says "I need a quote for Karen, hot water replacement"
 - Add those as line items
 - Add labor based on estimated hours
 - Suggest the callout fee
-- Total it up and confirm
+- Total it up and call finalise_quote
 
 IMPORTANT RULES:
 - When a tradie asks to schedule/book/create a job → use create_job
@@ -827,7 +833,7 @@ with header_container:
     </div>
     """, unsafe_allow_html=True)
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         if st.button("📋 My Jobs", use_container_width=True):
             quick_prompt = "What jobs do I have?"
@@ -840,6 +846,14 @@ with header_container:
     with col4:
         if st.button("💰 New Quote", use_container_width=True):
             quick_prompt = "I need to create a quote for a customer"
+    with col5:
+        if st.button("🗑️ Clear Chat", use_container_width=True):
+            greeting = f"{get_greeting()}, mate! Chat cleared. What can I help with?"
+            st.session_state.messages = [{"role": "assistant", "content": greeting}]
+            st.session_state.last_audio = None
+            st.session_state.pending_audio = None
+            st.session_state.audio_played = False
+            st.rerun()
 
 st.markdown("---")
 
@@ -933,6 +947,10 @@ if prompt:
     ) and not is_question
 
     st.session_state.should_auto_listen = is_question and not is_closing
+
+    # Auto-clear chat when conversation ends naturally, keep only the last AI message
+    if is_closing:
+        st.session_state.messages = [{"role": "assistant", "content": reply}]
 
     # Generate TTS and store in session state (played below, outside this block)
     with st.spinner("Generating voice..."):
