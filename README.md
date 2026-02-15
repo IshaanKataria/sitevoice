@@ -162,49 +162,68 @@ Sophiie senior engineers and CTO. Judging will take place over a 2-week period f
 
 | Field | Your Answer |
 |-------|-------------|
-| **Name** | |
-| **University / Employer** | |
+| **Name** | Ishaan Kataria |
+| **University / Employer** | Monash University Clayton |
 
 ### Project
 
 | Field | Your Answer |
 |-------|-------------|
-| **Project Name** | |
-| **One-Line Description** | |
-| **Demo Video Link** | |
-| **Tech Stack** | |
-| **AI Provider(s) Used** | |
+| **Project Name** | SiteVoice |
+| **One-Line Description** | A voice-powered AI assistant that helps plumbers build professional quotes and manage jobs hands-free on the job site. |
+| **Demo Video Link** | <!-- ADD YOUR VIDEO LINK HERE --> |
+| **Tech Stack** | Python, Streamlit, OpenAI GPT-4o, Whisper STT, OpenAI TTS |
+| **AI Provider(s) Used** | OpenAI (GPT-4o, Whisper, TTS) |
 
 ### About Your Project
 
 #### What does it do?
 
-<!-- 2-3 paragraphs explaining your agent, the problem it solves, and why the interaction matters -->
+SiteVoice is a voice-first AI assistant built for Australian plumbers (tradies) who need to create quotes and manage jobs while on-site with dirty hands and no time to type. It is solving a real problem, whereby tradies lose hours each week on admin, writing up quotes, scheduling jobs, and tracking their day,  when they should be focused on the work, they don't like typing at all.
+
+The AI has a built-in Australian plumbing materials database with real pricing (Rheem, Dux, Rinnai hot water systems, copper pipe, valves, drainage fittings, etc.) and knows standard labour rates. A plumber can talk through a job naturally For example: "Dave needs a hot water replacement, Rheem 250L electric, add a tempering valve and 3 metres of copper",then SiteVoice will build a professional, itemised quote in real time with accurate pricing, even GST calculations, and a clean layout.
+
+Beyond quoting, SiteVoice handles job scheduling, status tracking, notes, daily summaries, and price lookups, all through natural voice conversation with an Aussie-friendly personality, building rapport naturally.
 
 #### How does the interaction work?
 
-<!-- Describe the user experience — what does a user see, hear, or do when using your agent? -->
+The user speaks into their microphone (or types). Their voice is transcribed by OpenAI Whisper, then processed by GPT-4o which decides what actions to take using function calling. The AI responds with text in the chat and simultaneously speaks the reply back using OpenAI TTS at 1.2x speed for a snappy, natural humanlike feel.
+
+The sidebar acts as a live dashboard, when a quote is being built, a real-time quote card appears showing line items, running totals, and GST as they're added mid conversation. Completed quotes and scheduled jobs appear in expandable cards with full details. Quick action buttons at the top let users jump straight into common tasks.
+
+The interaction is designed to feel like talking to a knowledgeable office manager who happens to know plumbing pricing by heart. 
 
 #### What makes it special?
 
-<!-- What are you most proud of? What would you want the judges to notice? -->
+The interactive quoting workflow is the standout feature. Rather than filling out a form, the plumber has a natural conversation and the quote builds itself in the sidebar in real-time. The AI suggests materials from its database, adds them as line items, and finalises the quote when the tradie says "lock it in", all through multi-round function calling whereby the tradie and the AI work together simulataenously.
+
+The experience is actually hands-free. A plumber under a house with wet hands can create a professional $2,000+ quote entirely by voice in under two minutes. That's the interaction design goal, AI that fits into a tradie's real workflow, NOT the other way around.
 
 #### How to run it
 
-<!-- Step-by-step instructions to set up and run your project locally -->
-
 ```bash
-# Example:
-# git clone <your-repo>
-# cd <your-project>
-# npm install
-# cp .env.example .env  # add your API keys
-# npm start
+git clone <your-repo-url>
+cd <your-project-folder>
+pip install -r requirements.txt
+# Create a .env file with your OpenAI API key:
+echo OPENAI_API_KEY=your-key-here > .env
+streamlit run app.py
 ```
+
+**Requirements:**
+- Python 3.10+
+- An OpenAI API key (needs access to GPT-4o, Whisper, and TTS)
+- A microphone (for voice input)
 
 #### Architecture / Technical Notes
 
-<!-- Optional: describe your architecture, key technical decisions, or interesting implementation details -->
+- **Streamlit** for the web UI — chosen for rapid prototyping with Python, native audio input support, and session state management
+- **OpenAI GPT-4o with function calling** — the AI has 11 tool functions (create_job, start_quote, add_quote_line_item, finalise_quote, lookup_price, etc.) and can chain multiple tool calls in a single response (up to 5 rounds)
+- **OpenAI Whisper** for speech-to-text transcription
+- **OpenAI TTS** (voice: onyx, speed: 1.2x) for text-to-speech responses, played via base64-encoded audio in an iframe
+- **Plumbing materials database** (`plumbing_data.py`) with real Australian pricing across 6 categories, labour rates, and job templates
+- **Active quote context injection** — the current quote state is injected into the system prompt each turn so the AI always knows what's been added
+- **Inline HTML/CSS rendering** for sidebar quote cards (Streamlit's `st.html` with fully inline styles to work inside iframes)
 
 ---
 
