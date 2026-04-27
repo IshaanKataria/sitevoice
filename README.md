@@ -1,282 +1,92 @@
-# Sophiie AI Agents Hackathon 2026
+SiteVoice
 
-**Build the future of AI-human interaction.**
+A hands-free AI assistant for plumbers. Voice in, voice out. Schedules jobs, looks up material prices, builds itemised quotes by conversation, and keeps everything persistent across sessions.
 
-| | |
-|---|---|
-| **What** | A solo hackathon focused on AI agent interaction — voice, text, UX, and UI |
-| **When** | February 14–15, 2026 (Saturday–Sunday) |
-| **Where** | Virtual — participate from anywhere in Australia |
-| **Prize** | **$5,000 AUD cash** (1st place) + job offers for top performers |
-| **Format** | Solo only — show us what *you* can build |
-| **Hacking Time** | 33 hours |
+Built solo for the Sophiie AI Agents Hackathon (Feb 14-15, 2026), then refactored into a production-leaning portfolio piece.
 
----
 
-## The Challenge
+The Problem
 
-**Design and build an AI agent with an exceptional interaction experience.**
+Tradies spend half their day on tools and the other half on admin. Quote-building in particular is brutal: scribbling notes on a job site, re-typing them into a spreadsheet that night, looking up unit prices, calculating GST, sending it before the customer goes cold. SiteVoice flips it. The plumber talks. The agent listens, asks clarifying questions, looks up prices from a real materials database, builds the quote line-by-line in a sidebar card, and locks it in on command. Hands stay free. Quotes ship same day.
 
-We want to see how you think about the space between humans and AI. This is deliberately open-ended — you choose the problem, the modality, and the approach. What matters is the *interaction*.
 
-Some directions to inspire you (not requirements):
+How It Works
 
-- A voice agent that feels natural to talk to
-- A text-based assistant with a thoughtful, intuitive UX
-- A multi-modal agent that blends voice, text, and visual elements
-- An agent that handles a complex workflow through conversation
-- Something we haven't thought of yet
-
-**You will be judged on innovation, technical execution, and how good the interaction feels** — not just whether the AI works, but whether a human would *want* to use it.
-
-Use any tech stack. Use any AI provider. Use AI coding assistants. The only constraint is time.
-
----
-
-## Schedule
-
-All times are **AEST (Australian Eastern Standard Time, UTC+10 — Brisbane time)**.
-
-### Saturday, February 14
-
-| Time | Event |
-|------|-------|
-| **9:00 AM** | Kickoff — challenge explained, rules confirmed |
-| **9:30 AM** | **Hacking begins** |
-| 12:00 PM | Office hours / Q&A (optional, Discord) |
-| 4:00 PM | Community check-in / progress sharing (optional, Discord) |
-
-### Sunday, February 15
-
-| Time | Event |
-|------|-------|
-| **6:00 PM** | **Submission deadline — hard cut-off, no exceptions** |
-
-### After the Hackathon
-
-| When | Event |
-|------|-------|
-| Feb 16 – Feb 28 | Judging period — judges review all submissions |
-| ~Early March | Winners announced via livestream (details shared on Discord and Email) |
-
----
-
-## Rules
-
-### The Essentials
-
-1. **Solo only** — one person per submission, no teams
-2. **No pre-work** — all project code must be written during the hackathon window (after 9:30 AM AEST, Feb 14)
-3. **Public GitHub repo** — your repository must be publicly visible at time of submission
-4. **AI assistance is allowed** — Copilot, Claude, ChatGPT, Cursor, whatever you want. You still need to build it within the timeframe
-5. **Must be functional** — your project must run and be demonstrable, not just a concept or slide deck
-6. **One submission per person** — you may iterate, but submit one final project
-
-### What You CAN Prepare Before Kickoff
-
-- Research, planning, and brainstorming (on paper, in your head — just not in code)
-- Setting up your development environment
-- Reading documentation for tools/APIs you plan to use
-- Creating accounts (GitHub, API providers, etc.)
-- Watching tutorials
-
-### What You CANNOT Do Before Kickoff
-
-- Write any project code
-- Create your project repository
-- Fork/clone an existing project and modify it
-- Build components, libraries, or templates specifically for your submission
-- Start a project in a private repo then make it public later
-
-### How We Verify
-
-We will check:
-- **Repository creation date** — must be after 9:30 AM AEST, Feb 14
-- **Commit history** — should show natural progression, not a single massive commit
-- **First commit timestamp** — must be after kickoff
-
-**Red flags that will result in disqualification:**
-- Repo created before the hackathon
-- Single commit containing the entire project
-- Commits timestamped before kickoff
-- Evidence of code copied from a pre-existing private repo
-
----
-
-## Submission Requirements
-
-**Deadline: 6:00 PM AEST, Sunday February 15, 2026 — hard cut-off.**
-
-To submit, you must complete **all** of the following:
-
-1. **Public GitHub repo** — created after kickoff, with a clear commit history
-2. **This README** — fill out the [Your Submission](#your-submission) section below
-3. **Demo video** (2–5 minutes) — show your agent in action, explain your approach
-4. **Working project** — judges must be able to understand and evaluate your agent from the repo + video
-
-### How to Submit
-
-1. Fork this repository
-2. Build your project in the fork
-3. Fill out the [Your Submission](#your-submission) section below
-4. Record your demo video and add the link to your submission
-5. Ensure your repo is **public** before 6:00 PM AEST Sunday
-6. Submit your repo link via the submission form (link will be shared at kickoff)
-
----
-
-## Judging Criteria
-
-| Criteria | Weight | What We're Looking For |
-|----------|--------|----------------------|
-| **Interaction Design** | 30% | How intuitive, natural, and delightful is the human-AI interaction? Does it feel good to use? |
-| **Innovation** | 25% | Novel approach, creative problem-solving, or a fresh take on agent interaction |
-| **Technical Execution** | 25% | Code quality, architecture, reliability, completeness |
-| **Presentation** | 20% | Demo quality, clarity of communication, ability to convey your vision |
-
-### Judges
-
-Sophiie senior engineers and CTO. Judging will take place over a 2-week period following the submission deadline.
-
----
-
-## Prizes
-
-| Place | Prize |
-|-------|-------|
-| **1st Place** | **$5,000 AUD cash** |
-| **Top Performers** | Job offers or interview fast-tracks at Sophiie* |
-| **All Finalists** | Consideration for current and future roles |
-
-*\*Job offers and interview fast-tracks are entirely at the discretion of Sophiie and are not guaranteed.*
-
-> Participants retain full ownership and IP of their submissions. Sophiie receives a non-exclusive license to review and evaluate submissions for judging purposes only.
-
----
-
-## Your Submission
-
-> **Instructions:** Fill out this section in your forked repo. This is what judges will see first.
-
-### Participant
-
-| Field | Your Answer |
-|-------|-------------|
-| **Name** | Ishaan Kataria |
-| **University / Employer** | Monash University Clayton |
-
-### Project
-
-| Field | Your Answer |
-|-------|-------------|
-| **Project Name** | SiteVoice |
-| **One-Line Description** | A voice-powered AI assistant that helps plumbers build professional quotes and manage jobs hands-free on the job site. |
-| **Demo Video Link** | https://www.loom.com/share/eaa7dfe58c404c618f7f645bbb4f8709 |
-| **Tech Stack** | Python, Streamlit, OpenAI GPT-4o, Whisper STT, OpenAI TTS |
-| **AI Provider(s) Used** | OpenAI (GPT-4o, Whisper, TTS) |
-
-### About Your Project
-
-#### What does it do?
-
-SiteVoice is a voice-first AI assistant built for Australian plumbers (tradies) who need to create quotes and manage jobs while on-site with dirty hands and no time to type. It is solving a real problem, whereby tradies lose hours each week on admin, writing up quotes, scheduling jobs, and tracking their day,  when they should be focused on the work, they don't like typing at all.
-
-The AI has a built-in Australian plumbing materials database with real pricing (Rheem, Dux, Rinnai hot water systems, copper pipe, valves, drainage fittings, etc.) and knows standard labour rates. A plumber can talk through a job naturally For example: "Dave needs a hot water replacement, Rheem 250L electric, add a tempering valve and 3 metres of copper",then SiteVoice will build a professional, itemised quote in real time with accurate pricing, even GST calculations, and a clean layout.
-
-Beyond quoting, SiteVoice handles job scheduling, status tracking, notes, daily summaries, and price lookups, all through natural voice conversation with an Aussie-friendly personality, building rapport naturally.
-
-#### How does the interaction work?
-
-The user speaks into their microphone (or types). Their voice is transcribed by OpenAI Whisper, then processed by GPT-4o which decides what actions to take using function calling. The AI responds with text in the chat and simultaneously speaks the reply back using OpenAI TTS at 1.2x speed for a snappy, natural humanlike feel.
-
-The sidebar acts as a live dashboard, when a quote is being built, a real-time quote card appears showing line items, running totals, and GST as they're added mid conversation. Completed quotes and scheduled jobs appear in expandable cards with full details. Quick action buttons at the top let users jump straight into common tasks.
-
-The interaction is designed to feel like talking to a knowledgeable office manager who happens to know plumbing pricing by heart. 
-
-#### What makes it special?
-
-The interactive quoting workflow is the standout feature. Rather than filling out a form, the plumber has a natural conversation and the quote builds itself in the sidebar in real-time. The AI suggests materials from its database, adds them as line items, and finalises the quote when the tradie says "lock it in", all through multi-round function calling whereby the tradie and the AI work together simulataenously.
-
-The experience is actually hands-free. A plumber under a house with wet hands can create a professional $2,000+ quote entirely by voice in under two minutes. That's the interaction design goal, AI that fits into a tradie's real workflow, NOT the other way around.
-
-#### How to run it
-
-```bash
-git clone <your-repo-url>
-cd <your-project-folder>
-pip install -r requirements.txt
-# Create a .env file with your OpenAI API key:
-echo OPENAI_API_KEY=your-key-here > .env
-streamlit run app.py
+```
+Browser  <->  Streamlit (Python)  <->  OpenAI (Whisper / GPT-4o / TTS)
+                    |
+                    v
+              Supabase Postgres
+              (jobs, quotes, telemetry)
 ```
 
-**Requirements:**
-- Python 3.10+
-- An OpenAI API key (needs access to GPT-4o, Whisper, and TTS)
-- A microphone (for voice input)
+A single Streamlit script renders both the UI and the server-side logic. Voice input goes to Whisper for transcription. The transcript hits GPT-4o with 11 function tools registered (create_job, start_quote, add_quote_line_item, finalise_quote, lookup_price, daily_summary, etc). GPT-4o decides whether to ask a clarifying question or call tools; the loop runs up to 5 rounds per turn. The text reply goes to OpenAI tts-1 (voice: onyx) and plays back via an HTML audio element. If the reply ends with a question, JavaScript auto-clicks the mic button so the next user turn starts immediately - no tap-to-talk friction during a real conversation.
 
-#### Architecture / Technical Notes
+Persistence is a Supabase Postgres database keyed by an unguessable workspace UUID in the URL (?ws=...). Same security model as a Google Docs share link: knowing the URL grants access. Refresh keeps your data. Open a new tab without ?ws= and you get a fresh empty workspace. No login.
 
-- **Streamlit** for the web UI — chosen for rapid prototyping with Python, native audio input support, and session state management
-- **OpenAI GPT-4o with function calling** — the AI has 11 tool functions (create_job, start_quote, add_quote_line_item, finalise_quote, lookup_price, etc.) and can chain multiple tool calls in a single response (up to 5 rounds)
-- **OpenAI Whisper** for speech-to-text transcription
-- **OpenAI TTS** (voice: onyx, speed: 1.2x) for text-to-speech responses, played via base64-encoded audio in an iframe
-- **Plumbing materials database** (`plumbing_data.py`) with real Australian pricing across 6 categories, labour rates, and job templates
-- **Active quote context injection** — the current quote state is injected into the system prompt each turn so the AI always knows what's been added
-- **Inline HTML/CSS rendering** for sidebar quote cards (Streamlit's `st.html` with fully inline styles to work inside iframes)
+Every GPT-4o turn is instrumented. A telemetry table logs round count, tools called, latency, and token usage. A Dev panel in the sidebar reads aggregates: avg rounds, hit-cap rate, p50/p95 latency, top tools.
 
----
 
-## Code of Conduct
+Tech Stack
 
-All participants must adhere to a standard of respectful, professional behavior. Harassment, discrimination, or disruptive behavior of any kind will result in immediate disqualification.
+- Streamlit (frontend + backend in one Python process)
+- OpenAI: gpt-4o (chat + function calling), whisper-1 (STT), tts-1 (TTS, voice=onyx)
+- Supabase Postgres (persistence + telemetry)
+- supabase-py (DB client)
+- python-dotenv (secrets in dev)
 
-By participating, you agree to:
-- Treat all participants, judges, and organizers with respect
-- Submit only your own original work created during the hackathon
-- Not interfere with other participants' work
-- Follow the rules outlined in this document
 
----
+Run Locally
 
-## Communication & Support
+Prerequisites: Python 3.11+, uv (https://docs.astral.sh/uv/), an OpenAI API key, and a Supabase project.
 
-- **Discord** — join the hackathon Discord server for announcements, Q&A, and community chat (link provided upon registration)
-- **Office hours** — available during the event for technical questions
+    git clone https://github.com/IshaanKataria/sitevoice.git
+    cd sitevoice
+    uv venv
+    uv pip install -r requirements.txt
 
----
+Create .env with your secrets:
 
-## FAQ
+    OPENAI_API_KEY=sk-...
+    SUPABASE_URL=https://your-project.supabase.co
+    SUPABASE_ANON_KEY=eyJ...
 
-**Q: Can I use boilerplate / starter templates?**
-A: You can use publicly available boilerplate (e.g., `create-react-app`, `Next.js` starter) as a starting point. You cannot use custom templates you built specifically for this hackathon before kickoff.
+Apply the schema (paste schema.sql into Supabase SQL Editor and run). Then:
 
-**Q: Can I use existing open-source libraries and APIs?**
-A: Yes. You can use any publicly available libraries, frameworks, APIs, and services. The code *you* write must be created during the hackathon.
+    uv run streamlit run app.py
 
-**Q: Do I need to be in Australia?**
-A: Preferred but not strictly required. The hackathon is primarily targeted at Australian residents and students, but we won't turn away great talent.
+Open http://localhost:8501. The first load mints a workspace UUID and redirects to ?ws=<uuid>. Bookmark it; refresh keeps your jobs and quotes.
 
-**Q: Can I use AI coding tools like Copilot or Claude?**
-A: Absolutely. Use whatever tools you want. The 33-hour time constraint is the great equalizer.
 
-**Q: What if I can't finish?**
-A: Submit what you have. A well-thought-out partial project with a great demo video can still score well. We're evaluating your thinking and skill, not just completion.
+Decisions
 
-**Q: How will I know if I won?**
-A: Winners will be announced via livestream approximately 2 weeks after the hackathon. All participants will be notified.
+Why Streamlit over Next.js + FastAPI? Speed. A 33-hour hackathon rewards shipping working voice STT/TTS in hours, not days. Streamlit unifies frontend + backend in one Python process, so there's no API contract to define and no TypeScript context-switch. The cost is real: no mobile-friendly UI, no fine-grained component control, session state model is per-tab. For a single-tradie demo this tradeoff is correct. For productionising see DESIGN_V2.md.
 
-**Q: Can I keep working on my project after the deadline?**
-A: You can continue developing after the hackathon, but **only the state of your repo at 6:00 PM AEST Sunday Feb 15 will be judged**. We will check commit timestamps.
+Why GPT-4o over Claude or Gemini? Function calling reliability and latency on a long tool chain. The quote workflow can fire 6+ tools in a single turn (start_quote, multiple add_quote_line_item, finalise_quote). GPT-4o handled this without hallucinating tool arguments in testing.
 
----
+Why Supabase over SQLite? Streamlit Cloud has an ephemeral filesystem; SQLite would get wiped on every redeploy. Supabase gives free hosted Postgres with no DevOps. Postgres also unlocks JSONB for the per-job notes array and indexes on workspace_id - cheap stuff that matters when there's more than one tradie.
 
-## About Sophiie
+Why URL-based workspaces over auth? Auth is the wrong abstraction for a demo. Each browser gets a unique unguessable UUID; refresh-stable, shareable, no signup friction. For a real multi-tenant version you swap the workspace_id for an authenticated user_id and add Supabase RLS policies. The schema is already shaped for that migration.
 
-Sophiie is an AI office manager for trades businesses — helping plumbers, electricians, builders, and other trade professionals run their operations with intelligent automation. We're a team that cares deeply about how humans interact with AI, and we're looking for people who think the same way.
+Why function calling over intent classification? Structured tool definitions let the model parse client names and amounts directly into typed arguments, instead of hoping a regex catches the right substring. It's the modern approach and it composes - GPT-4o can chain 5 tools in one turn.
 
-[sophiie.com](https://sophiie.com)
+Why telemetry on a personal project? Most student projects ship and pray. I instrumented every GPT-4o turn so I could measure hit-cap rate, round count, and latency over time. Found that quote-building turns average 1.5-2 rounds and never hit the 5-round cap, so the cap is not the bottleneck. Latency p50 is around 5-6s end-to-end - the path to improvement is streaming TTS, not the cap.
 
----
 
-**Good luck. Build something that makes us say "wow."**
+What's in the Code
+
+- app.py - the Streamlit script: page config, system prompt, 11 tool definitions, function handlers, voice I/O, audio playback with autoplay-block fallback
+- db.py - thin Supabase wrappers (workspaces, jobs, quotes, line items, telemetry)
+- plumbing_data.py - hardcoded materials + labour rate database (Australian prices, AUD)
+- schema.sql - Postgres DDL for the 5 tables, indexed
+- requirements.txt - pinned to streamlit / openai / python-dotenv / supabase
+
+
+What I'd Do Next
+
+See DESIGN_V2.md for the full v2 spec: migrate to Next.js + FastAPI, stream Whisper chunks over WebSocket for sub-second voice latency, add Supabase Auth with RLS, ship a mobile PWA. Designed but deliberately not built - the Streamlit version is the right tool for the demo's constraints.
+
+
+Built For
+
+Sophiie AI Agents Hackathon 2026 - solo, 33 hours, voice agent track. The original hackathon submission lives at github.com/IshaanKataria/hackathon. This repo is the post-hackathon polished version.

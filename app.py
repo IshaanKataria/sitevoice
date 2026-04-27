@@ -6,12 +6,14 @@ import os
 import tempfile
 import json
 import base64
+import uuid
 from datetime import datetime
 from plumbing_data import (
     PLUMBING_MATERIALS, LABOR_RATES, JOB_TEMPLATES,
     lookup_material, search_materials, get_job_template,
     get_all_categories, get_labor_rates_text
 )
+import db
 
 # Load API key
 load_dotenv()
@@ -24,6 +26,24 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# --- WORKSPACE SETUP ---
+# Tenant isolation via unguessable UUID in URL (?ws=...). No auth needed.
+# Same pattern as Google Docs share links: knowing the URL = access.
+_raw_ws = st.query_params.get("ws")
+try:
+    _ws_id = str(uuid.UUID(_raw_ws)) if _raw_ws else None
+except (ValueError, AttributeError):
+    _ws_id = None  # invalid UUID — silently mint a fresh one
+
+if not _ws_id:
+    _ws_id = str(uuid.uuid4())
+    st.query_params["ws"] = _ws_id
+    db.ensure_workspace(_ws_id)
+elif "workspace_initialised" not in st.session_state:
+    db.ensure_workspace(_ws_id)
+    st.session_state.workspace_initialised = True
+st.session_state.workspace_id = _ws_id
 
 # --- CUSTOM CSS ---
 st.markdown("""
@@ -396,14 +416,10 @@ TOOLS = [
 ]
 
 # Initialize session state
+# Jobs / quotes / active_quote are persisted in Supabase (see db.py).
+# Only ephemeral UI state lives here.
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "jobs" not in st.session_state:
-    st.session_state.jobs = []
-if "quotes" not in st.session_state:
-    st.session_state.quotes = []
-if "active_quote" not in st.session_state:
-    st.session_state.active_quote = None
 if "last_audio" not in st.session_state:
     st.session_state.last_audio = None
 if "greeted" not in st.session_state:
@@ -417,79 +433,77 @@ if "should_auto_listen" not in st.session_state:
 
 
 # --- FUNCTION HANDLERS ---
+# All handlers persist via db.py (Supabase) instead of session_state.
+# Workspace ID is read from session_state on each call.
+
+STATUS_EMOJI = {"Scheduled": "📅", "In Progress": "🔨", "Complete": "✅", "Cancelled": "❌"}
+
+
+def _job_line(job: dict) -> str:
+    emoji = STATUS_EMOJI.get(job["status"], "📅")
+    return f"- {emoji} {job['description']} for {job['client_name']} on {job.get('job_date') or 'TBD'} at {job.get('job_time') or 'TBD'} [{job['status']}]"
+
+
 def handle_create_job(args):
-    priority = args.get("priority", "normal")
-    job = {
-        "id": len(st.session_state.jobs) + 1,
-        "client_name": args.get("client_name", "Unknown"),
-        "description": args.get("description", ""),
-        "date": args.get("date", "TBD"),
-        "time": args.get("time", "TBD"),
-        "address": args.get("address", "Not specified"),
-        "priority": priority,
-        "notes": [],
-        "status": "Scheduled",
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M")
-    }
-    st.session_state.jobs.append(job)
-    return f"Job created: {job['description']} for {job['client_name']} on {job['date']} at {job['time']} (Priority: {priority})"
+    ws = st.session_state.workspace_id
+    job = db.create_job(
+        ws,
+        client_name=args.get("client_name", "Unknown"),
+        description=args.get("description", ""),
+        job_date=args.get("date", "TBD"),
+        job_time=args.get("time", "TBD"),
+        address=args.get("address", "Not specified"),
+        priority=args.get("priority", "normal"),
+    )
+    return f"Job created: {job['description']} for {job['client_name']} on {job['job_date']} at {job['job_time']} (Priority: {job['priority']})"
 
 
 def handle_list_jobs(args):
-    if not st.session_state.jobs:
+    jobs = db.list_jobs(st.session_state.workspace_id)
+    if not jobs:
         return "No jobs scheduled yet. Your calendar is clear, mate!"
-    job_list = []
-    for job in st.session_state.jobs:
-        status_emoji = {"Scheduled": "📅", "In Progress": "🔨", "Complete": "✅", "Cancelled": "❌"}.get(job["status"], "📅")
-        priority_flag = " URGENT" if job["priority"] == "urgent" else ""
-        job_list.append(f"- {status_emoji} {job['description']} for {job['client_name']} on {job['date']} at {job['time']} [{job['status']}]{priority_flag}")
-    return "Here are your jobs:\n" + "\n".join(job_list)
+    lines = []
+    for job in jobs:
+        urgent = " URGENT" if job["priority"] == "urgent" else ""
+        lines.append(_job_line(job) + urgent)
+    return "Here are your jobs:\n" + "\n".join(lines)
 
 
 def handle_add_note(args):
-    client_name = args.get("client_name", "").lower()
-    note = args.get("note", "")
-    for job in st.session_state.jobs:
-        if client_name in job["client_name"].lower():
-            job["notes"].append({"text": note, "time": datetime.now().strftime("%I:%M %p")})
-            return f"Note added to {job['client_name']}'s job: {note}"
-    return f"Couldn't find a job for {args.get('client_name')}. Try listing your jobs first."
+    ws = st.session_state.workspace_id
+    client_name = args.get("client_name", "")
+    note_text = args.get("note", "")
+    job = db.add_note_to_job(ws, client_name, note_text, datetime.now().strftime("%I:%M %p"))
+    if job:
+        return f"Note added to {job['client_name']}'s job: {note_text}"
+    return f"Couldn't find a job for {client_name}. Try listing your jobs first."
 
 
 def handle_start_quote(args):
-    quote = {
-        "id": len(st.session_state.quotes) + 1,
-        "client_name": args.get("client_name", "Unknown"),
-        "job_description": args.get("job_description", ""),
-        "address": args.get("address", ""),
-        "line_items": [],
-        "status": "draft",
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "finalised_at": None,
-        "notes": "",
-        "include_gst": True,
-    }
-    st.session_state.active_quote = quote
+    ws = st.session_state.workspace_id
+    quote = db.start_quote(
+        ws,
+        client_name=args.get("client_name", "Unknown"),
+        job_description=args.get("job_description", ""),
+        address=args.get("address", ""),
+    )
     return f"Quote started for {quote['client_name']} — {quote['job_description']}. I'm ready to add line items. What materials and work are needed?"
 
 
 def handle_add_quote_line_item(args):
-    if st.session_state.active_quote is None:
+    ws = st.session_state.workspace_id
+    active = db.get_active_quote(ws)
+    if active is None:
         return "No active quote. Start a quote first with start_quote."
-
-    item = {
-        "item_name": args.get("item_name", "Unknown item"),
-        "category": args.get("category", "other"),
-        "unit_price": args.get("unit_price", 0),
-        "quantity": args.get("quantity", 1),
-        "unit": args.get("unit", "each"),
-        "line_total": args.get("unit_price", 0) * args.get("quantity", 1),
-    }
-    st.session_state.active_quote["line_items"].append(item)
-
-    # Calculate running total
-    running_total = sum(li["line_total"] for li in st.session_state.active_quote["line_items"])
-
+    item = db.add_line_item(
+        active["id"],
+        item_name=args.get("item_name", "Unknown item"),
+        category=args.get("category", "other"),
+        unit_price=float(args.get("unit_price", 0)),
+        quantity=float(args.get("quantity", 1)),
+        unit=args.get("unit", "each"),
+    )
+    running_total = sum(li["line_total"] for li in db._list_line_items(active["id"]))
     return (
         f"Added: {item['item_name']} — {item['quantity']} x ${item['unit_price']:.2f} = ${item['line_total']:.2f}. "
         f"Running total: ${running_total:.2f} (ex GST). "
@@ -498,45 +512,34 @@ def handle_add_quote_line_item(args):
 
 
 def handle_remove_quote_line_item(args):
-    if st.session_state.active_quote is None:
+    ws = st.session_state.workspace_id
+    active = db.get_active_quote(ws)
+    if active is None:
         return "No active quote."
-
-    idx = args.get("item_index", 0) - 1  # Convert to 0-based
-    items = st.session_state.active_quote["line_items"]
-    if 0 <= idx < len(items):
-        removed = items.pop(idx)
-        running_total = sum(li["line_total"] for li in items)
-        return f"Removed: {removed['item_name']}. Running total now: ${running_total:.2f} (ex GST)."
-    return "Invalid item number. Check the quote and try again."
+    pos = int(args.get("item_index", 0))
+    removed = db.remove_line_item_at_position(active["id"], pos)
+    if removed is None:
+        return "Invalid item number. Check the quote and try again."
+    running_total = sum(li["line_total"] for li in db._list_line_items(active["id"]))
+    return f"Removed: {removed['item_name']}. Running total now: ${running_total:.2f} (ex GST)."
 
 
 def handle_finalise_quote(args):
-    if st.session_state.active_quote is None:
+    ws = st.session_state.workspace_id
+    active = db.get_active_quote(ws)
+    if active is None:
         return "No active quote to finalise."
-
-    quote = st.session_state.active_quote
-    quote["notes"] = args.get("notes", "")
-    quote["include_gst"] = args.get("include_gst", True)
-    quote["status"] = "sent"
-    quote["finalised_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    subtotal = sum(li["line_total"] for li in quote["line_items"])
-    gst = subtotal * 0.1 if quote["include_gst"] else 0
-    total = subtotal + gst
-    quote["subtotal"] = subtotal
-    quote["gst"] = gst
-    quote["total"] = total
-
-    st.session_state.quotes.append(quote)
-    st.session_state.active_quote = None
-
-    materials_count = len([li for li in quote["line_items"] if li["category"] == "materials"])
-    labor_items = [li for li in quote["line_items"] if li["category"] == "labor"]
-
+    quote = db.finalise_quote(
+        active["id"],
+        notes=args.get("notes", ""),
+        include_gst=args.get("include_gst", True),
+    )
+    materials_count = sum(1 for li in quote["line_items"] if li["category"] == "materials")
+    labor_count = sum(1 for li in quote["line_items"] if li["category"] == "labor")
     return (
         f"Quote finalised for {quote['client_name']}! "
-        f"{materials_count} material items, {len(labor_items)} labor items. "
-        f"Subtotal: ${subtotal:.2f} + GST ${gst:.2f} = Total: ${total:.2f}. "
+        f"{materials_count} material items, {labor_count} labor items. "
+        f"Subtotal: ${quote['subtotal']:.2f} + GST ${quote['gst']:.2f} = Total: ${quote['total']:.2f}. "
         f"Quote is ready to send to the customer."
     )
 
@@ -546,7 +549,6 @@ def handle_lookup_price(args):
     results = search_materials(query)
     if not results:
         return f"No materials found matching '{query}'. Try a different search term."
-
     lines = [f"Found {len(results)} result(s) for '{query}':"]
     for key, item, category in results[:8]:
         lines.append(f"  - {item['name']}: ${item['unit_price']:.2f}/{item['unit']} ({category})")
@@ -554,46 +556,48 @@ def handle_lookup_price(args):
 
 
 def handle_update_job_status(args):
-    client_name = args.get("client_name", "").lower()
-    new_status = args.get("status", "Scheduled")
-    for job in st.session_state.jobs:
-        if client_name in job["client_name"].lower():
-            job["status"] = new_status
-            return f"Job for {job['client_name']} updated to: {new_status}"
+    ws = st.session_state.workspace_id
+    job = db.update_job_status(
+        ws,
+        client_name=args.get("client_name", ""),
+        status=args.get("status", "Scheduled"),
+    )
+    if job:
+        return f"Job for {job['client_name']} updated to: {job['status']}"
     return f"Couldn't find a job for {args.get('client_name')}."
 
 
 def handle_daily_summary(args):
-    total = len(st.session_state.jobs)
-    scheduled = len([j for j in st.session_state.jobs if j["status"] == "Scheduled"])
-    in_progress = len([j for j in st.session_state.jobs if j["status"] == "In Progress"])
-    complete = len([j for j in st.session_state.jobs if j["status"] == "Complete"])
-    urgent = len([j for j in st.session_state.jobs if j["priority"] == "urgent"])
-    total_quotes = len(st.session_state.quotes)
-    quote_value = sum(q.get("total", q.get("amount", 0)) for q in st.session_state.quotes)
-    summary = f"Here's your day at a glance:\n"
+    ws = st.session_state.workspace_id
+    jobs = db.list_jobs(ws)
+    completed = db.list_completed_quotes(ws)
+    active = db.get_active_quote(ws)
+    total = len(jobs)
+    scheduled = sum(1 for j in jobs if j["status"] == "Scheduled")
+    in_progress = sum(1 for j in jobs if j["status"] == "In Progress")
+    complete = sum(1 for j in jobs if j["status"] == "Complete")
+    urgent = sum(1 for j in jobs if j["priority"] == "urgent")
+    quote_value = sum(float(q.get("total") or 0) for q in completed)
+    summary = "Here's your day at a glance:\n"
     summary += f"- Total jobs: {total}\n"
     summary += f"- Scheduled: {scheduled}\n"
     summary += f"- In progress: {in_progress}\n"
     summary += f"- Complete: {complete}\n"
     if urgent > 0:
         summary += f"- Urgent jobs: {urgent}\n"
-    summary += f"- Quotes sent: {total_quotes} (${quote_value:.2f} total value)\n"
-    if st.session_state.active_quote:
-        summary += f"- Quote in progress for: {st.session_state.active_quote['client_name']}\n"
+    summary += f"- Quotes sent: {len(completed)} (${quote_value:.2f} total value)\n"
+    if active:
+        summary += f"- Quote in progress for: {active['client_name']}\n"
     return summary
 
 
 def handle_search_jobs(args):
-    query = args.get("query", "").lower()
-    found = [j for j in st.session_state.jobs if query in j["client_name"].lower() or query in j["description"].lower()]
+    ws = st.session_state.workspace_id
+    query = args.get("query", "")
+    found = db.search_jobs(ws, query)
     if not found:
         return f"No jobs found matching '{query}'."
-    results = []
-    for job in found:
-        status_emoji = {"Scheduled": "📅", "In Progress": "🔨", "Complete": "✅", "Cancelled": "❌"}.get(job["status"], "📅")
-        results.append(f"- {status_emoji} {job['description']} for {job['client_name']} on {job['date']} at {job['time']} [{job['status']}]")
-    return f"Found {len(found)} job(s) matching '{query}':\n" + "\n".join(results)
+    return f"Found {len(found)} job(s) matching '{query}':\n" + "\n".join(_job_line(j) for j in found)
 
 
 FUNCTION_MAP = {
@@ -611,22 +615,38 @@ FUNCTION_MAP = {
 }
 
 
+MAX_TOOL_ROUNDS = 5
+
+
 def process_ai_response(messages):
-    """Process AI response, handling multiple rounds of tool calls."""
+    """Process AI response, handling multiple rounds of tool calls.
+
+    Logs one telemetry row per turn to tool_call_events so we can measure
+    rounds-used, hit-cap rate, and latency over time.
+    """
+    import time
+    turn_id = str(uuid.uuid4())
+    t0 = time.perf_counter()
+    tools_called: list[str] = []
+    rounds = 0
+    prompt_tokens_sum = 0
+    completion_tokens_sum = 0
+    error: str | None = None
+    final_text = ""
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
             tools=TOOLS,
         )
+        if response.usage:
+            prompt_tokens_sum += response.usage.prompt_tokens
+            completion_tokens_sum += response.usage.completion_tokens
         message = response.choices[0].message
 
-        # Handle tool calls (may need multiple rounds)
-        max_rounds = 5
-        rounds = 0
-        while message.tool_calls and rounds < max_rounds:
+        while message.tool_calls and rounds < MAX_TOOL_ROUNDS:
             rounds += 1
-            # Append the assistant message with tool calls
             messages.append({
                 "role": "assistant",
                 "content": message.content or "",
@@ -644,6 +664,7 @@ def process_ai_response(messages):
             })
             for tool_call in message.tool_calls:
                 func_name = tool_call.function.name
+                tools_called.append(func_name)
                 func_args = json.loads(tool_call.function.arguments)
                 if func_name in FUNCTION_MAP:
                     result = FUNCTION_MAP[func_name](func_args)
@@ -660,15 +681,46 @@ def process_ai_response(messages):
                 messages=messages,
                 tools=TOOLS,
             )
+            if response.usage:
+                prompt_tokens_sum += response.usage.prompt_tokens
+                completion_tokens_sum += response.usage.completion_tokens
             message = response.choices[0].message
 
-        return message.content or "Done, mate! Anything else?"
+        final_text = message.content or "Done, mate! Anything else?"
+        # Hit the cap if we still have pending tool calls after MAX_TOOL_ROUNDS
+        hit_cap = bool(message.tool_calls) and rounds >= MAX_TOOL_ROUNDS
     except Exception as e:
-        return f"Sorry mate, hit a snag: {str(e)}"
+        error = str(e)
+        final_text = f"Sorry mate, hit a snag: {error}"
+        hit_cap = False
+
+    # Telemetry — fire-and-forget; never let logging break the user flow
+    try:
+        db.log_tool_call_event(
+            workspace_id=st.session_state.get("workspace_id"),
+            turn_id=turn_id,
+            rounds_used=rounds,
+            hit_cap=hit_cap,
+            tools_called=tools_called,
+            total_latency_ms=int((time.perf_counter() - t0) * 1000),
+            prompt_tokens=prompt_tokens_sum or None,
+            completion_tokens=completion_tokens_sum or None,
+            error=error,
+        )
+    except Exception:
+        pass
+
+    return final_text
 
 
-def render_quote_card_html(quote, is_active=False):
-    """Render a self-contained quote card with all styles inline (works in st.html iframe)."""
+def render_quote_card(quote, mode="completed"):
+    """
+    Render a self-contained quote card with inline styles (works in st.html iframe).
+    mode:
+      - "active": amber border + glow, for the quote currently being built
+      - "completed": neutral border, for finalised quotes in the sidebar list
+    """
+    is_active = mode == "active"
     line_items_html = ""
 
     # Group items by category
@@ -747,143 +799,7 @@ def render_quote_card_html(quote, is_active=False):
     return card_html
 
 
-# --- SIDEBAR ---
-with st.sidebar:
-    # Active quote card (top of sidebar for visibility)
-    if st.session_state.active_quote:
-        st.markdown("## 🔨 Building Quote...")
-        # st.html renders raw HTML properly in its own iframe (Streamlit 1.33+)
-        try:
-            st.html(render_quote_card_html(st.session_state.active_quote, is_active=True))
-        except AttributeError:
-            st.markdown(render_quote_card_html(st.session_state.active_quote, is_active=True), unsafe_allow_html=True)
-        items_count = len(st.session_state.active_quote["line_items"])
-        running_total = sum(li["line_total"] for li in st.session_state.active_quote["line_items"])
-        st.caption(f"{items_count} items • ${running_total:.2f} ex GST • Keep talking to add more")
-        st.markdown("---")
-
-    st.markdown("## 📋 Job Board")
-    if st.session_state.jobs:
-        for i, job in enumerate(st.session_state.jobs):
-            status_emoji = {"Scheduled": "📅", "In Progress": "🔨", "Complete": "✅", "Cancelled": "❌"}.get(job["status"], "📅")
-            priority_color = "🔴" if job["priority"] == "urgent" else "🟡" if job["priority"] == "normal" else "🟢"
-
-            with st.expander(f"{status_emoji} {job['client_name']} — {job['date']}"):
-                st.write(f"**Job:** {job['description']}")
-                st.write(f"**Time:** {job['time']}")
-                st.write(f"**Address:** {job['address']}")
-                st.write(f"**Priority:** {priority_color} {job['priority'].title()}")
-                st.write(f"**Status:** {job['status']}")
-                if job['notes']:
-                    st.write("**Notes:**")
-                    for note in job['notes']:
-                        if isinstance(note, dict):
-                            st.write(f"  - [{note['time']}] {note['text']}")
-                        else:
-                            st.write(f"  - {note}")
-
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    if job["status"] != "Complete":
-                        if st.button("Done", key=f"done_{i}", use_container_width=True):
-                            st.session_state.jobs[i]["status"] = "Complete"
-                            st.rerun()
-                with col_b:
-                    if job["status"] == "Scheduled":
-                        if st.button("Start", key=f"start_{i}", use_container_width=True):
-                            st.session_state.jobs[i]["status"] = "In Progress"
-                            st.rerun()
-                with col_c:
-                    if st.button("Del", key=f"del_{i}", use_container_width=True):
-                        st.session_state.jobs.pop(i)
-                        st.rerun()
-    else:
-        st.info("No jobs yet — tell SiteVoice to schedule one!")
-
-    st.markdown("---")
-    st.markdown("## 💰 Completed Quotes")
-
-    if st.session_state.quotes:
-        for i, quote in enumerate(st.session_state.quotes):
-            total = quote.get("total", quote.get("amount", 0))
-            with st.expander(f"#{quote.get('id', i+1)} {quote['client_name']} — ${total:,.2f}"):
-                # Job description
-                job_desc = quote.get("job_description", quote.get("description", ""))
-                addr_line = f"  \n📍 {quote['address']}" if quote.get("address") else ""
-                st.markdown(f"*{job_desc}*{addr_line}")
-
-                # Group line items
-                materials = [li for li in quote.get("line_items", []) if li["category"] == "materials"]
-                labor = [li for li in quote.get("line_items", []) if li["category"] == "labor"]
-                callout = [li for li in quote.get("line_items", []) if li["category"] == "callout"]
-                other = [li for li in quote.get("line_items", []) if li["category"] == "other"]
-
-                for section_name, items in [("Materials", materials), ("Labour", labor), ("Callout", callout), ("Other", other)]:
-                    if items:
-                        st.markdown(f"**{section_name}**")
-                        for item in items:
-                            st.markdown(
-                                f"<div style='display:flex;justify-content:space-between;padding:2px 0;font-size:13px;'>"
-                                f"<span>{item['item_name']}<br/><span style='color:#94a3b8;font-size:11px;'>{item['quantity']} x ${item['unit_price']:.2f}</span></span>"
-                                f"<span style='font-weight:600;white-space:nowrap;'>${item['line_total']:.2f}</span>"
-                                f"</div>",
-                                unsafe_allow_html=True
-                            )
-
-                subtotal = quote.get("subtotal", sum(li["line_total"] for li in quote.get("line_items", [])))
-                gst = quote.get("gst", subtotal * 0.1)
-                st.divider()
-                st.markdown(
-                    f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;'>"
-                    f"<span>Subtotal</span><span style='font-weight:600;'>${subtotal:.2f}</span></div>"
-                    f"<div style='display:flex;justify-content:space-between;font-size:13px;padding:2px 0;color:#94a3b8;'>"
-                    f"<span>GST (10%)</span><span>${gst:.2f}</span></div>",
-                    unsafe_allow_html=True
-                )
-                st.divider()
-                st.markdown(
-                    f"<div style='display:flex;justify-content:space-between;align-items:center;padding:4px 0;'>"
-                    f"<span style='font-weight:700;font-size:15px;'>TOTAL</span>"
-                    f"<span style='font-weight:700;font-size:20px;color:#34d399;'>${total:,.2f}</span></div>",
-                    unsafe_allow_html=True
-                )
-
-                st.caption(f"Generated {quote.get('created_at', '')}")
-                if st.button("🗑️ Delete Quote", key=f"del_q_{i}", use_container_width=True):
-                    st.session_state.quotes.pop(i)
-                    st.rerun()
-    else:
-        st.info("No quotes yet — ask SiteVoice to create one!")
-
-    # Quick stats
-    st.markdown("---")
-    st.markdown("## 📊 Dashboard")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Jobs", len(st.session_state.jobs))
-    with col2:
-        st.metric("Quotes", len(st.session_state.quotes))
-
-    if st.session_state.quotes:
-        total_value = sum(q.get("total", q.get("amount", 0)) for q in st.session_state.quotes)
-        st.metric("Revenue Pipeline", f"${total_value:,.2f}")
-
-    complete_jobs = len([j for j in st.session_state.jobs if j["status"] == "Complete"])
-    if st.session_state.jobs:
-        completion_rate = int((complete_jobs / len(st.session_state.jobs)) * 100)
-        if completion_rate < 33:
-            bar_color = "#ef4444"
-        elif completion_rate < 66:
-            bar_color = "#f59e0b"
-        else:
-            bar_color = "#22c55e"
-        st.markdown(f"**Completion: {completion_rate}%**")
-        st.markdown(
-            f"""<div style="background-color: #1e293b; border-radius: 10px; height: 16px; width: 100%;">
-                <div style="background: linear-gradient(90deg, {bar_color}, {bar_color}dd); width: {max(completion_rate, 2)}%; height: 16px; border-radius: 10px; transition: width 0.5s ease;"></div>
-            </div>""",
-            unsafe_allow_html=True
-        )
+# --- SIDEBAR (rendered at bottom of script for fresh DB state after chat handler runs) ---
 
 
 # --- MAIN CHAT AREA ---
@@ -983,16 +899,16 @@ if prompt:
     api_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     # Inject active quote context so AI knows what's been added
-    if st.session_state.active_quote:
-        q = st.session_state.active_quote
+    active_q = db.get_active_quote(st.session_state.workspace_id)
+    if active_q:
         items_summary = ""
-        for idx, li in enumerate(q["line_items"], 1):
+        for idx, li in enumerate(active_q["line_items"], 1):
             items_summary += f"  {idx}. {li['item_name']} — {li['quantity']} x ${li['unit_price']:.2f} = ${li['line_total']:.2f} ({li['category']})\n"
-        running_total = sum(li["line_total"] for li in q["line_items"])
+        running_total = sum(li["line_total"] for li in active_q["line_items"])
         quote_context = (
             f"\n[ACTIVE QUOTE CONTEXT]\n"
-            f"Currently building quote for: {q['client_name']}\n"
-            f"Job: {q['job_description']}\n"
+            f"Currently building quote for: {active_q['client_name']}\n"
+            f"Job: {active_q['job_description']}\n"
             f"Current line items:\n{items_summary if items_summary else '  (none yet)'}\n"
             f"Running total: ${running_total:.2f} (ex GST)\n"
             f"[END QUOTE CONTEXT]"
@@ -1010,13 +926,19 @@ if prompt:
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
 
-    # Auto-scroll to bottom so user always sees latest message
+    # Auto-scroll to bottom so user always sees latest message.
+    # Streamlit renamed the main container across versions, so try several selectors.
     components.html("""
     <script>
-        window.parent.document.querySelector('section.main').scrollTo({
-            top: window.parent.document.querySelector('section.main').scrollHeight,
-            behavior: 'smooth'
-        });
+        (function() {
+            var doc = window.parent.document;
+            var main = doc.querySelector('section.main')
+                    || doc.querySelector('section[data-testid="stMain"]')
+                    || doc.querySelector('[data-testid="stAppViewContainer"]')
+                    || doc.querySelector('main');
+            if (!main) return;
+            main.scrollTo({ top: main.scrollHeight, behavior: 'smooth' });
+        })();
     </script>
     """, height=0)
 
@@ -1077,7 +999,7 @@ if st.session_state.pending_audio and not st.session_state.audio_played:
         auto_listen_block = ""
 
     components.html(f"""
-    <audio id="sv-audio" autoplay>
+    <audio id="sv-audio" preload="auto" style="width:100%;display:none;">
         <source src="data:audio/mp3;base64,{audio_b64}" type="audio/mp3">
     </audio>
     <div id="sv-status" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;color:#60a5fa;padding:8px 0;">
@@ -1089,19 +1011,180 @@ if st.session_state.pending_audio and not st.session_state.audio_played:
             var status = document.getElementById('sv-status');
             if (!audio) return;
 
-            audio.addEventListener('ended', function() {{
+            var resolved = false;
+            function endTurn() {{
+                if (resolved) return;
+                resolved = true;
                 status.textContent = '{end_status_text}';
                 status.style.color = '{end_color}';
                 {auto_listen_block}
-            }});
+            }}
+
+            audio.addEventListener('ended', endTurn);
 
             audio.addEventListener('error', function() {{
+                if (resolved) return;
+                resolved = true;
                 status.textContent = '⚠️ Audio error — type your message instead';
                 status.style.color = '#f59e0b';
             }});
+
+            // Try to play explicitly. If browser blocks autoplay, surface controls.
+            var playPromise = audio.play();
+            if (playPromise !== undefined) {{
+                playPromise.catch(function() {{
+                    audio.controls = true;
+                    audio.style.display = 'block';
+                    status.textContent = '🔇 Tap play to hear reply';
+                    status.style.color = '#f59e0b';
+                    audio.addEventListener('play', function() {{
+                        status.textContent = '🔊 Speaking...';
+                        status.style.color = '#60a5fa';
+                    }}, {{ once: true }});
+                }});
+            }}
+
+            // Safety: never let the indicator hang. End the turn after 30s no matter what.
+            setTimeout(endTurn, 30000);
         }})();
     </script>
-    """, height=50)
+    """, height=80)
 
     st.session_state.audio_played = True
     st.session_state.pending_audio = None
+
+
+# --- SIDEBAR (placed last so it sees DB writes from this rerun's chat handler) ---
+with st.sidebar:
+    ws_id = st.session_state.workspace_id
+    sidebar_jobs = db.list_jobs(ws_id)
+    sidebar_active_quote = db.get_active_quote(ws_id)
+    sidebar_completed_quotes = db.list_completed_quotes(ws_id)
+
+    if sidebar_active_quote:
+        st.markdown("## 🔨 Building Quote...")
+        try:
+            st.html(render_quote_card(sidebar_active_quote, mode="active"))
+        except AttributeError:
+            st.markdown(render_quote_card(sidebar_active_quote, mode="active"), unsafe_allow_html=True)
+        items_count = len(sidebar_active_quote["line_items"])
+        running_total = sum(li["line_total"] for li in sidebar_active_quote["line_items"])
+        st.caption(f"{items_count} items • ${running_total:.2f} ex GST • Keep talking to add more")
+        st.markdown("---")
+
+    st.markdown("## 📋 Job Board")
+    if sidebar_jobs:
+        for job in sidebar_jobs:
+            status_emoji = STATUS_EMOJI.get(job["status"], "📅")
+            priority_color = "🔴" if job["priority"] == "urgent" else "🟡" if job["priority"] == "normal" else "🟢"
+
+            with st.expander(f"{status_emoji} {job['client_name']} — {job.get('job_date') or 'TBD'}"):
+                st.write(f"**Job:** {job['description']}")
+                st.write(f"**Time:** {job.get('job_time') or 'TBD'}")
+                st.write(f"**Address:** {job.get('address') or 'Not specified'}")
+                st.write(f"**Priority:** {priority_color} {job['priority'].title()}")
+                st.write(f"**Status:** {job['status']}")
+                if job.get("notes"):
+                    st.write("**Notes:**")
+                    for note in job["notes"]:
+                        if isinstance(note, dict):
+                            st.write(f"  - [{note['time']}] {note['text']}")
+                        else:
+                            st.write(f"  - {note}")
+
+                col_a, col_b, col_c = st.columns(3)
+                with col_a:
+                    if job["status"] != "Complete":
+                        if st.button("Done", key=f"done_{job['id']}", use_container_width=True):
+                            db.set_job_status_by_id(job["id"], "Complete")
+                            st.rerun()
+                with col_b:
+                    if job["status"] == "Scheduled":
+                        if st.button("Start", key=f"start_{job['id']}", use_container_width=True):
+                            db.set_job_status_by_id(job["id"], "In Progress")
+                            st.rerun()
+                with col_c:
+                    if st.button("Del", key=f"del_{job['id']}", use_container_width=True):
+                        db.delete_job(job["id"])
+                        st.rerun()
+    else:
+        st.info("No jobs yet — tell SiteVoice to schedule one!")
+
+    st.markdown("---")
+    st.markdown("## 💰 Completed Quotes")
+
+    if sidebar_completed_quotes:
+        for quote in sidebar_completed_quotes:
+            total = float(quote.get("total") or 0)
+            with st.expander(f"#{quote['id']} {quote['client_name']} — ${total:,.2f}"):
+                try:
+                    st.html(render_quote_card(quote, mode="completed"))
+                except AttributeError:
+                    st.markdown(render_quote_card(quote, mode="completed"), unsafe_allow_html=True)
+                if st.button("🗑️ Delete Quote", key=f"del_q_{quote['id']}", use_container_width=True):
+                    db.delete_quote(quote["id"])
+                    st.rerun()
+    else:
+        st.info("No quotes yet — ask SiteVoice to create one!")
+
+    st.markdown("---")
+    st.markdown("## 📊 Dashboard")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Jobs", len(sidebar_jobs))
+    with col2:
+        st.metric("Quotes", len(sidebar_completed_quotes))
+
+    if sidebar_completed_quotes:
+        total_value = sum(float(q.get("total") or 0) for q in sidebar_completed_quotes)
+        st.metric("Revenue Pipeline", f"${total_value:,.2f}")
+
+    complete_jobs = sum(1 for j in sidebar_jobs if j["status"] == "Complete")
+    if sidebar_jobs:
+        completion_rate = int((complete_jobs / len(sidebar_jobs)) * 100)
+        if completion_rate < 33:
+            bar_color = "#ef4444"
+        elif completion_rate < 66:
+            bar_color = "#f59e0b"
+        else:
+            bar_color = "#22c55e"
+        st.markdown(f"**Completion: {completion_rate}%**")
+        st.markdown(
+            f"""<div style="background-color: #1e293b; border-radius: 10px; height: 16px; width: 100%;">
+                <div style="background: linear-gradient(90deg, {bar_color}, {bar_color}dd); width: {max(completion_rate, 2)}%; height: 16px; border-radius: 10px; transition: width 0.5s ease;"></div>
+            </div>""",
+            unsafe_allow_html=True
+        )
+
+    st.markdown("---")
+    with st.expander("🔬 Dev — Tool-call telemetry", expanded=False):
+        scope = st.radio(
+            "Scope",
+            ["This workspace", "All workspaces"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        try:
+            stats = db.telemetry_stats(ws_id if scope == "This workspace" else None)
+        except Exception as e:
+            st.caption(f"Telemetry unavailable: {e}")
+            stats = {"total_turns": 0}
+
+        if stats.get("total_turns", 0) == 0:
+            st.caption("No turns logged yet — chat with SiteVoice to populate.")
+        else:
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                st.metric("Turns", stats["total_turns"])
+                st.metric("Avg rounds", stats["avg_rounds"])
+            with mc2:
+                st.metric("Hit-cap rate", f"{stats['hit_cap_rate']}%")
+                if stats.get("p50_latency_ms") is not None:
+                    st.metric("p50 latency", f"{stats['p50_latency_ms']} ms")
+            if stats.get("p95_latency_ms") is not None:
+                st.caption(f"p95 latency: {stats['p95_latency_ms']} ms")
+            if stats.get("top_tools"):
+                st.caption("**Top tools:**")
+                for name, count in stats["top_tools"]:
+                    st.caption(f"  - {name}: {count}")
+        st.caption(f"Cap: {MAX_TOOL_ROUNDS} rounds per turn")
