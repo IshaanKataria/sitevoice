@@ -857,10 +857,10 @@ with header_container:
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         if st.button("📅 Schedule a job", use_container_width=True):
-            quick_prompt = "Schedule a hot water replacement for Karen tomorrow at 9am, urgent"
+            quick_prompt = "Schedule an electric hot water replacement for Karen Smith at 12 Bell Street tomorrow at 9am, urgent priority"
     with col2:
         if st.button("💰 Build a quote", use_container_width=True):
-            quick_prompt = "Quote Karen for a Rheem 250L hot water system, 4 hours labour, lock it in"
+            quick_prompt = "Build a quote for Karen Smith at 12 Bell Street: Rheem 250L electric HWS, tempering valve, 4 hours of standard labour. Then lock it in."
     with col3:
         if st.button("📋 List jobs", use_container_width=True):
             quick_prompt = "What jobs do I have?"
